@@ -47,6 +47,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequestMapping("/owners/{ownerId}")
 class PetController {
 
+	private static final String OWNER_NOT_FOUND_PREFIX = "Owner not found with id: ";
+
+	private static final String OWNER_ID_CORRECT_MSG = ". Please ensure the ID is correct and the owner exists in the database.";
+
 	private static final String VIEWS_PETS_CREATE_OR_UPDATE_FORM = "pets/createOrUpdatePetForm";
 
 	private final OwnerRepository owners;
@@ -68,8 +72,8 @@ class PetController {
 	@ModelAttribute("owner")
 	public Owner findOwner(@PathVariable("ownerId") int ownerId) {
 		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
-		return optionalOwner.orElseThrow(() -> new IllegalArgumentException(
-				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+		return optionalOwner
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 	}
 
 	// Returns PetDto instead of Pet entity
@@ -80,8 +84,8 @@ class PetController {
 			return new PetDto();
 		}
 		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
-		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
-				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+		Owner owner = optionalOwner
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 		return PetDto.fromEntity(owner.getPet(petId));
 	}
 
@@ -106,8 +110,7 @@ class PetController {
 			BindingResult result, RedirectAttributes redirectAttributes) {
 
 		Owner owner = this.owners.findById(ownerId)
-			.orElseThrow(() -> new IllegalArgumentException(
-					"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 
 		if (StringUtils.hasText(petDto.getName()) && petDto.isNew() && owner.getPet(petDto.getName(), true) != null) {
 			result.rejectValue("name", "duplicate", "already exists");
@@ -142,8 +145,7 @@ class PetController {
 			BindingResult result, RedirectAttributes redirectAttributes) {
 
 		Owner owner = this.owners.findById(ownerId)
-			.orElseThrow(() -> new IllegalArgumentException(
-					"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 
 		String petName = petDto.getName();
 		if (StringUtils.hasText(petName)) {

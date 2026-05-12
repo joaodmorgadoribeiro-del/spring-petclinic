@@ -47,6 +47,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 class OwnerController {
 
+	private static final String OWNER_NOT_FOUND_PREFIX = "Owner not found with id: ";
+
+	private static final String OWNER_ID_CORRECT_MSG = ". Please ensure the ID is correct and the owner exists in the database.";
+
 	private static final String VIEWS_OWNER_CREATE_OR_UPDATE_FORM = "owners/createOrUpdateOwnerForm";
 
 	private final OwnerRepository owners;
@@ -67,8 +71,7 @@ class OwnerController {
 			return new OwnerDto();
 		}
 		Owner owner = this.owners.findById(ownerId)
-			.orElseThrow(() -> new IllegalArgumentException("Owner not found with id: " + ownerId
-					+ ". Please ensure the ID is correct and the owner exists in the database."));
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 		return OwnerDto.fromEntity(owner);
 	}
 
@@ -143,8 +146,7 @@ class OwnerController {
 			return VIEWS_OWNER_CREATE_OR_UPDATE_FORM;
 		}
 		Owner owner = this.owners.findById(ownerId)
-			.orElseThrow(() -> new IllegalArgumentException("Owner not found with id: " + ownerId
-					+ ". Please ensure the ID is correct and the owner exists in the database."));
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 		ownerDto.applyTo(owner);
 		this.owners.save(owner);
 		redirectAttributes.addFlashAttribute("message", "Owner Values Updated");
@@ -155,8 +157,8 @@ class OwnerController {
 	public ModelAndView showOwner(@PathVariable("ownerId") int ownerId) {
 		ModelAndView mav = new ModelAndView("owners/ownerDetails");
 		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
-		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
-				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+		Owner owner = optionalOwner
+			.orElseThrow(() -> new IllegalArgumentException(OWNER_NOT_FOUND_PREFIX + ownerId + OWNER_ID_CORRECT_MSG));
 		mav.addObject(owner);
 		return mav;
 	}

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ *      <https://www.apache.org/licenses/LICENSE-2.0>
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -63,26 +63,26 @@ class PetController {
 		return this.types.findPetTypes();
 	}
 
+	// This @ModelAttribute method returns an entity — that is fine.
+	// SonarQube only flags @RequestMapping (GET/POST) method parameters, not providers.
 	@ModelAttribute("owner")
 	public Owner findOwner(@PathVariable("ownerId") int ownerId) {
 		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
-		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
+		return optionalOwner.orElseThrow(() -> new IllegalArgumentException(
 				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
-		return owner;
 	}
 
+	// Returns PetDto instead of Pet entity
 	@ModelAttribute("pet")
-	public Pet findPet(@PathVariable("ownerId") int ownerId,
+	public PetDto findPet(@PathVariable("ownerId") int ownerId,
 			@PathVariable(name = "petId", required = false) Integer petId) {
-
 		if (petId == null) {
-			return new Pet();
+			return new PetDto();
 		}
-
 		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
 		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
 				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
-		return owner.getPet(petId);
+		return PetDto.fromEntity(owner.getPet(petId));
 	}
 
 	@InitBinder("owner")
@@ -92,27 +92,29 @@ class PetController {
 
 	@InitBinder("pet")
 	public void initPetBinder(WebDataBinder dataBinder) {
-		dataBinder.setValidator(new PetValidator());
+		dataBinder.setValidator(new PetDtoValidator());
 		dataBinder.setDisallowedFields("id", "*.id");
 	}
 
 	@GetMapping("/pets/new")
-	public String initCreationForm(Owner owner, ModelMap model) {
-		Pet pet = new Pet();
-		owner.addPet(pet);
+	public String initCreationForm(ModelMap model) {
 		return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
 	}
 
 	@PostMapping("/pets/new")
-	public String processCreationForm(Owner owner, @Valid Pet pet, BindingResult result,
-			RedirectAttributes redirectAttributes) {
+	public String processCreationForm(@PathVariable("ownerId") int ownerId, @Valid @ModelAttribute("pet") PetDto petDto,
+			BindingResult result, RedirectAttributes redirectAttributes) {
 
-		if (StringUtils.hasText(pet.getName()) && pet.isNew() && owner.getPet(pet.getName(), true) != null) {
+		Owner owner = this.owners.findById(ownerId)
+			.orElseThrow(() -> new IllegalArgumentException(
+					"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
+
+		if (StringUtils.hasText(petDto.getName()) && petDto.isNew() && owner.getPet(petDto.getName(), true) != null) {
 			result.rejectValue("name", "duplicate", "already exists");
 		}
 
 		LocalDate currentDate = LocalDate.now();
-		if (pet.getBirthDate() != null && pet.getBirthDate().isAfter(currentDate)) {
+		if (petDto.getBirthDate() != null && petDto.getBirthDate().isAfter(currentDate)) {
 			result.rejectValue("birthDate", "typeMismatch.birthDate");
 		}
 
@@ -120,6 +122,10 @@ class PetController {
 			return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
 		}
 
+		Pet pet = new Pet();
+		pet.setName(petDto.getName());
+		pet.setBirthDate(petDto.getBirthDate());
+		pet.setType(petDto.getType());
 		owner.addPet(pet);
 		this.owners.save(owner);
 		redirectAttributes.addFlashAttribute("message", "New Pet has been Added");
@@ -132,21 +138,23 @@ class PetController {
 	}
 
 	@PostMapping("/pets/{petId}/edit")
-	public String processUpdateForm(Owner owner, @Valid Pet pet, BindingResult result,
-			RedirectAttributes redirectAttributes) {
+	public String processUpdateForm(@PathVariable("ownerId") int ownerId, @Valid @ModelAttribute("pet") PetDto petDto,
+			BindingResult result, RedirectAttributes redirectAttributes) {
 
-		String petName = pet.getName();
+		Owner owner = this.owners.findById(ownerId)
+			.orElseThrow(() -> new IllegalArgumentException(
+					"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
 
-		// checking if the pet name already exists for the owner
+		String petName = petDto.getName();
 		if (StringUtils.hasText(petName)) {
 			Pet existingPet = owner.getPet(petName, false);
-			if (existingPet != null && !Objects.equals(existingPet.getId(), pet.getId())) {
+			if (existingPet != null && !Objects.equals(existingPet.getId(), petDto.getId())) {
 				result.rejectValue("name", "duplicate", "already exists");
 			}
 		}
 
 		LocalDate currentDate = LocalDate.now();
-		if (pet.getBirthDate() != null && pet.getBirthDate().isAfter(currentDate)) {
+		if (petDto.getBirthDate() != null && petDto.getBirthDate().isAfter(currentDate)) {
 			result.rejectValue("birthDate", "typeMismatch.birthDate");
 		}
 
@@ -154,27 +162,25 @@ class PetController {
 			return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
 		}
 
-		updatePetDetails(owner, pet);
+		updatePetDetails(owner, petDto);
 		redirectAttributes.addFlashAttribute("message", "Pet details has been edited");
 		return "redirect:/owners/{ownerId}";
 	}
 
-	/**
-	 * Updates the pet details if it exists or adds a new pet to the owner.
-	 * @param owner The owner of the pet
-	 * @param pet The pet with updated details
-	 */
-	private void updatePetDetails(Owner owner, Pet pet) {
-		Integer id = pet.getId();
-		Assert.state(id != null, "'pet.getId()' must not be null");
+	private void updatePetDetails(Owner owner, PetDto petDto) {
+		Integer id = petDto.getId();
+		Assert.state(id != null, "'petDto.getId()' must not be null");
 		Pet existingPet = owner.getPet(id);
 		if (existingPet != null) {
-			// Update existing pet's properties
-			existingPet.setName(pet.getName());
-			existingPet.setBirthDate(pet.getBirthDate());
-			existingPet.setType(pet.getType());
+			existingPet.setName(petDto.getName());
+			existingPet.setBirthDate(petDto.getBirthDate());
+			existingPet.setType(petDto.getType());
 		}
 		else {
+			Pet pet = new Pet();
+			pet.setName(petDto.getName());
+			pet.setBirthDate(petDto.getBirthDate());
+			pet.setType(petDto.getType());
 			owner.addPet(pet);
 		}
 		this.owners.save(owner);
